@@ -335,19 +335,21 @@ class EmbeddingWorker {
 const worker = new EmbeddingWorker();
 
 // Cleanup on process exit
-process.on('SIGINT', async () => {
+let isShuttingDown = false;
+
+const gracefulShutdown = async (signal: string) => {
+  if (isShuttingDown) return;
+  isShuttingDown = true;
+  
+  log(`Worker: Received ${signal}, cleaning up...`);
   await worker.dispose();
   process.exit(0);
-});
+};
 
-process.on('SIGTERM', async () => {
-  await worker.dispose();
-  process.exit(0);
-});
+process.on('SIGINT', () => { gracefulShutdown('SIGINT').catch(console.error); });
+process.on('SIGTERM', () => { gracefulShutdown('SIGTERM').catch(console.error); });
 
-process.on('beforeExit', async () => {
-  await worker.dispose();
-});
+// beforeExit is unreliable for async cleanup - rely on explicit signals instead
 
 if (parentPort) {
   parentPort.on(
